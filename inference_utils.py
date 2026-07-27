@@ -72,10 +72,11 @@ def ensure_latentsync_repository(target_dir: str = "LatentSync") -> str:
         except Exception as e:
             print(f"[LatentSync] Error cloning LatentSync repository: {e}")
 
-    if os.path.exists(target_dir) and target_dir not in sys.path:
-        sys.path.insert(0, os.path.abspath(target_dir))
+    abs_target: str = os.path.abspath(target_dir)
+    if abs_target not in sys.path:
+        sys.path.insert(0, abs_target)
 
-    return target_dir
+    return abs_target
 
 
 def generate_synthetic_video(video_path: str = "clip.mp4", duration_sec: int = 3, fps: int = 25) -> bool:
