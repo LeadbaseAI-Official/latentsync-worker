@@ -29,25 +29,32 @@ def run_latentsync_1_5(
     print(f"[LatentSync 1.5] Audio input: {audio_path}")
     print(f"[LatentSync 1.5] Output file: {output_path}")
 
-    repo_dir: str = ensure_latentsync_repository("LatentSync")
-    
-    full_config_path: str = os.path.join(repo_dir, config_path) if os.path.exists(os.path.join(repo_dir, config_path)) else config_path
-    
+    abs_repo_dir: str = ensure_latentsync_repository("LatentSync")
+
+    abs_config_path: str = os.path.join(abs_repo_dir, config_path) if not os.path.isabs(config_path) else config_path
+    if not os.path.exists(abs_config_path):
+        abs_config_path = os.path.abspath(config_path)
+
+    abs_checkpoint_path: str = os.path.abspath(checkpoint_path)
+    abs_video_path: str = os.path.abspath(video_path)
+    abs_audio_path: str = os.path.abspath(audio_path)
+    abs_output_path: str = os.path.abspath(output_path)
+
     # Construct the inference command using the official LatentSync inference script
     cmd: List[str] = [
         sys.executable, "-m", "scripts.inference",
-        "--unet_config_path", full_config_path,
-        "--inference_ckpt_path", checkpoint_path,
+        "--unet_config_path", abs_config_path,
+        "--inference_ckpt_path", abs_checkpoint_path,
         "--inference_steps", str(steps),
         "--guidance_scale", str(guidance_scale),
-        "--video_path", video_path,
-        "--audio_path", audio_path,
-        "--video_out_path", output_path
+        "--video_path", abs_video_path,
+        "--audio_path", abs_audio_path,
+        "--video_out_path", abs_output_path
     ]
 
-    print(f"[LatentSync 1.5] Executing command: {' '.join(cmd)}")
-    
-    # Environment with CPU Threadmaxing
+    print(f"[LatentSync 1.5] Executing command in {abs_repo_dir}: {' '.join(cmd)}")
+
+    # Environment with CPU Threadmaxing & PYTHONPATH set to LatentSync repo root
     env_vars: Dict[str, str] = os.environ.copy()
     num_cpus: int = os.cpu_count() or 4
     env_vars["OMP_NUM_THREADS"] = str(num_cpus)
@@ -55,19 +62,20 @@ def run_latentsync_1_5(
     env_vars["OPENBLAS_NUM_THREADS"] = str(num_cpus)
     env_vars["TORCH_NUM_THREADS"] = str(num_cpus)
     env_vars["CUDA_VISIBLE_DEVICES"] = ""
+    env_vars["PYTHONPATH"] = f"{abs_repo_dir}:{env_vars.get('PYTHONPATH', '')}"
 
     try:
-        process = subprocess.run(cmd, cwd=os.getcwd(), env=env_vars, check=True)
+        process = subprocess.run(cmd, cwd=abs_repo_dir, env=env_vars, check=True)
         elapsed: float = time.time() - start_time
         print(f"[LatentSync 1.5] Inference completed successfully in {elapsed:.2f} seconds.")
-        return os.path.exists(output_path)
+        return os.path.exists(abs_output_path)
     except subprocess.CalledProcessError as cpe:
         print(f"[LatentSync 1.5] Inference script returned error code {cpe.returncode}.")
         print("[LatentSync 1.5] Falling back to direct Python pipeline invocation...")
-        return fallback_direct_inference(video_path, audio_path, output_path, steps, guidance_scale, checkpoint_path)
+        return fallback_direct_inference(abs_video_path, abs_audio_path, abs_output_path, steps, guidance_scale, abs_checkpoint_path)
     except Exception as e:
         print(f"[LatentSync 1.5] Execution error: {e}")
-        return fallback_direct_inference(video_path, audio_path, output_path, steps, guidance_scale, checkpoint_path)
+        return fallback_direct_inference(abs_video_path, abs_audio_path, abs_output_path, steps, guidance_scale, abs_checkpoint_path)
 
 
 def fallback_direct_inference(
@@ -109,7 +117,7 @@ def main() -> None:
     print("==================================================")
     print("         LatentSync 1.5 Cloud Deployment          ")
     print("==================================================")
-    
+
     # 1. Configure CPU Threadmaxing
     configure_cpu_threadmaxing()
 
